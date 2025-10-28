@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>Googleカレンダー 色ラベル別予定ビューア</title>
+  <title>Googleカレンダー 色ラベル別予定出力</title>
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -40,10 +40,9 @@
   <div id="content"></div>
 
   <script>
-    const CLIENT_ID =  '824420123974-lgbll4b8274mfjke7c23hobh08nar6b3.apps.googleusercontent.com';
+    const CLIENT_ID =  'YOUR_CLIENT_ID_HERE'; // Netlify URLを登録したOAuth 2.0クライアントID
     const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
     const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
-    const API_KEY = ''; // 任意。不要でOK
 
     let tokenClient;
     let gapiInited = false;
@@ -65,7 +64,6 @@
 
     async function initializeGapiClient() {
       await gapi.client.init({
-        apiKey: API_KEY,
         discoveryDocs: [DISCOVERY_DOC],
       });
       gapiInited = true;
@@ -75,24 +73,29 @@
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
-        callback: '',
+        callback: async (resp) => {
+          if (resp.error !== undefined) {
+            console.error(resp);
+            return;
+          }
+          authorizeButton.style.display = 'none';
+          signoutButton.style.display = 'inline-block';
+          colorSelect.disabled = false;
+          fetchButton.disabled = false;
+        },
       });
       gisInited = true;
     }
 
     function handleAuthClick() {
-      tokenClient.callback = async (resp) => {
-        if (resp.error !== undefined) throw resp;
-        authorizeButton.style.display = 'none';
-        signoutButton.style.display = 'inline-block';
-        colorSelect.disabled = false;
-        fetchButton.disabled = false;
-      };
       tokenClient.requestAccessToken({ prompt: 'consent' });
     }
 
     function handleSignoutClick() {
-      google.accounts.oauth2.revoke(google.accounts.oauth2.getToken().access_token);
+      const token = google.accounts.oauth2.getToken().access_token;
+      if (token) {
+        google.accounts.oauth2.revoke(token);
+      }
       content.innerHTML = '';
       authorizeButton.style.display = 'inline-block';
       signoutButton.style.display = 'none';
