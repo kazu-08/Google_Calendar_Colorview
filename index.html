@@ -1,147 +1,93 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <title>Googleカレンダー 色ラベル別予定出力</title>
-  <script src="https://apis.google.com/js/api.js"></script>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <style>
-    body { font-family: sans-serif; padding: 20px; }
-    h1 { font-size: 1.4rem; }
-    select, button { margin: 8px 0; padding: 6px 10px; }
-    #content { margin-top: 16px; }
-  </style>
-</head>
-<body>
-  <h1>Googleカレンダー 色ラベル別予定ビューア</h1>
-  <p>ログインして、表示したい色を選んでください。</p>
-  <button id="authorize_button">Googleログイン</button>
-  <button id="signout_button" style="display:none">ログアウト</button>
+<script>
+const CLIENT_ID = '824420123974-lgbll4b8274mfjke7c23hobh08nar6b3.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
+const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 
-  <div>
-    <label for="colorSelect">色ラベルを選択：</label>
-    <select id="colorSelect" disabled>
-      <option value="">選択してください</option>
-      <option value="1">ブルー</option>
-      <option value="2">グリーン</option>
-      <option value="3">パープル</option>
-      <option value="4">レッド</option>
-      <option value="5">イエロー</option>
-      <option value="6">オレンジ</option>
-      <option value="7">ターコイズ</option>
-      <option value="8">グレー</option>
-      <option value="9">ダークグリーン</option>
-      <option value="10">マルーン</option>
-      <option value="11">ティール</option>
-    </select>
-    <button id="fetch_button" disabled>予定を表示</button>
-  </div>
+let tokenClient;
+let gapiInited = false;
 
-  <div id="content"></div>
+const authorizeButton = document.getElementById('authorize_button');
+const signoutButton = document.getElementById('signout_button');
+const fetchButton = document.getElementById('fetch_button');
+const colorSelect = document.getElementById('colorSelect');
+const content = document.getElementById('content');
 
-  <script>
-    const CLIENT_ID =  '824420123974-lgbll4b8274mfjke7c23hobh08nar6b3.apps.googleusercontent.com';
-    const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
-    const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
+authorizeButton.onclick = handleAuthClick;
+signoutButton.onclick = handleSignoutClick;
+fetchButton.onclick = listEventsByColor;
 
-    let tokenClient;
-    let gapiInited = false;
-    let gisInited = false;
+function gapiLoaded() {
+  gapi.load('client', async () => {
+    await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
+    gapiInited = true;
+  });
+}
 
-    const authorizeButton = document.getElementById('authorize_button');
-    const signoutButton = document.getElementById('signout_button');
-    const fetchButton = document.getElementById('fetch_button');
-    const colorSelect = document.getElementById('colorSelect');
-    const content = document.getElementById('content');
-
-    authorizeButton.onclick = handleAuthClick;
-    signoutButton.onclick = handleSignoutClick;
-    fetchButton.onclick = listEventsByColor;
-
-    function gapiLoaded() {
-      gapi.load('client', initializeGapiClient);
-    }
-
-    async function initializeGapiClient() {
-      await gapi.client.init({
-        discoveryDocs: [DISCOVERY_DOC],
-      });
-      gapiInited = true;
-    }
-
-    function gisLoaded() {
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: async (resp) => {
-          if (resp.error !== undefined) {
-            console.error(resp);
-            return;
-          }
-          authorizeButton.style.display = 'none';
-          signoutButton.style.display = 'inline-block';
-          colorSelect.disabled = false;
-          fetchButton.disabled = false;
-        },
-      });
-      gisInited = true;
-    }
-
-    function handleAuthClick() {
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    }
-
-    function handleSignoutClick() {
-      const token = google.accounts.oauth2.getToken().access_token;
-      if (token) {
-        google.accounts.oauth2.revoke(token);
-      }
-      content.innerHTML = '';
-      authorizeButton.style.display = 'inline-block';
-      signoutButton.style.display = 'none';
-      colorSelect.disabled = true;
-      fetchButton.disabled = true;
-    }
-
-    async function listEventsByColor() {
-      const colorId = colorSelect.value;
-      if (!colorId) {
-        alert('色を選んでください');
+function gisLoaded() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: async (resp) => {
+      if (resp.error !== undefined) {
+        console.error(resp);
         return;
       }
+      // ログイン成功後に UI を有効化
+      authorizeButton.style.display = 'none';
+      signoutButton.style.display = 'inline-block';
+      colorSelect.disabled = false;
+      fetchButton.disabled = false;
+    }
+  });
+}
 
-      let response;
-      try {
-        response = await gapi.client.calendar.events.list({
-          calendarId: 'primary',
-          singleEvents: true,
-          orderBy: 'startTime',
-          maxResults: 200,
-          timeMin: new Date().toISOString(),
-        });
-      } catch (err) {
-        content.innerText = err.message;
-        return;
-      }
+function handleAuthClick() {
+  // 初回またはトークン期限切れのときは consent
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
 
-      const events = response.result.items || [];
-      const filtered = events.filter(e => e.colorId === colorId);
+function handleSignoutClick() {
+  const token = google.accounts.oauth2.getToken().access_token;
+  if (token) google.accounts.oauth2.revoke(token);
+  content.innerHTML = '';
+  authorizeButton.style.display = 'inline-block';
+  signoutButton.style.display = 'none';
+  colorSelect.disabled = true;
+  fetchButton.disabled = true;
+}
 
-      if (!filtered.length) {
-        content.innerHTML = `<p>選択した色の予定はありません。</p>`;
-        return;
-      }
+async function listEventsByColor() {
+  const colorId = colorSelect.value;
+  if (!colorId) return alert('色を選んでください');
 
-      const html = filtered.map(e => {
-        const start = e.start.dateTime || e.start.date;
-        const end = e.end.dateTime || e.end.date;
-        return `<li>${start} 〜 ${end}：<strong>${e.summary}</strong></li>`;
-      }).join('');
-      content.innerHTML = `<ul>${html}</ul>`;
+  try {
+    const response = await gapi.client.calendar.events.list({
+      calendarId: 'primary',
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 200,
+      timeMin: new Date().toISOString(),
+    });
+
+    const events = response.result.items || [];
+    const filtered = events.filter(e => e.colorId === colorId);
+
+    if (!filtered.length) {
+      content.innerHTML = `<p>選択した色の予定はありません。</p>`;
+      return;
     }
 
-    gapiLoaded();
-    gisLoaded();
-  </script>
-</body>
-</html>
+    const html = filtered.map(e => {
+      const start = e.start.dateTime || e.start.date;
+      const end = e.end.dateTime || e.end.date;
+      return `<li>${start} 〜 ${end}：<strong>${e.summary}</strong></li>`;
+    }).join('');
+    content.innerHTML = `<ul>${html}</ul>`;
+  } catch (err) {
+    content.innerText = err.message;
+  }
+}
+
+gapiLoaded();
+gisLoaded();
+</script>
